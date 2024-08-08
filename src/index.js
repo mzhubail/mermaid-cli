@@ -152,7 +152,7 @@ async function cli () {
     }
   } else if (output === '-') {
     // `--output -` means write to stdout.
-    output = undefined
+    output = '/dev/stdout'
     quiet = true
 
     if (!outputFormat) {
@@ -403,7 +403,7 @@ function markdownImage ({ url, title, alt }) {
  * path to a markdown file containing mermaid.
  * If this is a string, loads the mermaid definition from the given file.
  * If this is `undefined`, loads the mermaid definition from stdin.
- * @param {`${string}.${"md" | "markdown" | "svg" | "png" | "pdf"}`} output - Path to the output file.
+ * @param {`${string}.${"md" | "markdown" | "svg" | "png" | "pdf"}` | "/dev/stdout"} output - Path to the output file.
  * @param {Object} [opts] - Options
  * @param {import("puppeteer").LaunchOptions} [opts.puppeteerConfig] - Puppeteer launch options.
  * @param {boolean} [opts.quiet] - If set, suppress log output.
@@ -450,6 +450,10 @@ async function run (input, output, { puppeteerConfig = {}, quiet = false, output
 
     const definition = await getInputData(input)
     if (input && /\.(md|markdown)$/.test(input)) {
+      if (output === '/dev/stdout') {
+        throw new Error('Cannot use `stdout` with markdown input')
+      }
+
       const imagePromises = []
       for (const mermaidCodeblockMatch of definition.matchAll(mermaidChartsInMarkdownRegexGlobal)) {
         if (browser === undefined) {
@@ -510,7 +514,7 @@ async function run (input, output, { puppeteerConfig = {}, quiet = false, output
       info('Generating single mermaid chart')
       browser = await puppeteer.launch(puppeteerConfig)
       const data = await parseMMD(browser, definition, outputFormat, parseMMDOptions)
-      await output
+      await output !== '/dev/stdout'
         ? fs.promises.writeFile(output, data)
         : process.stdout.write(data)
     }
