@@ -111,7 +111,7 @@ async function cli () {
     .addOption(new Option('-w, --width [width]', 'Width of the page').argParser(parseCommanderInt).default(800))
     .addOption(new Option('-H, --height [height]', 'Height of the page').argParser(parseCommanderInt).default(600))
     .option('-i, --input <input>', 'Input mermaid file. Files ending in .md will be treated as Markdown and all charts (e.g. ```mermaid (...)``` or :::mermaid (...):::) will be extracted and generated. Use `-` to read from stdin.')
-    .option('-o, --output [output]', 'Output file. It should be either md, svg, png or pdf. Optional. Default: input + ".svg"')
+    .option('-o, --output [output]', 'Output file. It should be either md, svg, png, pdf or use `-` to output to stdout. Optional. Default: input + ".svg"')
     .addOption(new Option('-e, --outputFormat [format]', 'Output format for the generated image.').choices(['svg', 'png', 'pdf']).default(null, 'Loaded from the output file extension'))
     .addOption(new Option('-b, --backgroundColor [backgroundColor]', 'Background color for pngs/svgs (not pdfs). Example: transparent, red, \'#F0F0F0\'.').default('white'))
     .option('-c, --configFile [configFile]', 'JSON configuration file for mermaid.')
@@ -150,13 +150,26 @@ async function cli () {
     } else {
       output = input ? (`${input}.svg`) : 'out.svg'
     }
-  }
-  if (!/\.(?:svg|png|pdf|md|markdown)$/.test(output)) {
+  } else if (output === '-') {
+    // `--output -` means write to stdout.
+    output = undefined
+    quiet = true
+
+    if (!outputFormat) {
+      outputFormat = 'svg'
+      warn('No output format specified, using svg. ' +
+        'If you want to specify an output format and supress this warning, ' +
+        'please use `-e <format>.` '
+      )
+    }
+  } else if (!/\.(?:svg|png|pdf|md|markdown)$/.test(output)) {
     error('Output file must end with ".md"/".markdown", ".svg", ".png" or ".pdf"')
   }
-  const outputDir = path.dirname(output)
-  if (!fs.existsSync(outputDir)) {
-    error(`Output directory "${outputDir}/" doesn't exist`)
+  if (output) {
+    const outputDir = path.dirname(output)
+    if (!fs.existsSync(outputDir)) {
+      error(`Output directory "${outputDir}/" doesn't exist`)
+    }
   }
 
   // check config files
@@ -497,7 +510,9 @@ async function run (input, output, { puppeteerConfig = {}, quiet = false, output
       info('Generating single mermaid chart')
       browser = await puppeteer.launch(puppeteerConfig)
       const data = await parseMMD(browser, definition, outputFormat, parseMMDOptions)
-      await fs.promises.writeFile(output, data)
+      await output
+        ? fs.promises.writeFile(output, data)
+        : process.stdout.write(data)
     }
   } finally {
     await browser?.close?.()
